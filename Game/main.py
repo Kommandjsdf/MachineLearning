@@ -15,9 +15,10 @@ image_dict = {
         "right" : pg.image.load("img/cab_right.png"),
     },
     "hole" : pg.image.load("img/hole.png"),
-    "hotel" : pg.image.load("img/hotel.png"),
+    "hotel" : pg.transform.scale(pg.image.load("img/hotel.png"), (80, 80)),
     "passenger" : pg.image.load("img/passenger.png"),
-    "taxi_bg" : pg.image.load("img/taxi_background.png")
+    "taxi_bg" : pg.transform.scale(pg.image.load("img/taxi_background.png"), (32, 32)),
+    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (32, 32))
 }
 
 
@@ -26,15 +27,30 @@ class Player:
         self.view = "rear"
         self.image = image_dict["player"][self.view]
         self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
+        self.rect.x = x
+        self.rect.y = y
         self.x_direction = 0
         self.y_direction = 0
-        self.speed = 1
+        self.speed = 2
 
     def update(self):
         self.image = image_dict["player"][self.view]
         self.rect.x += self.speed * self.x_direction
         self.rect.y += self.speed * self.y_direction
+
+    def is_crashed(self):
+        for x in range(self.rect.left, self.rect.right, 1):
+            for y in range(self.rect.top, self.rect.bottom, 1):
+                try:
+                    if sc.get_at((x, y)) in ((220, 215, 177, 255), (202, 206, 157, 255), (212, 207, 174, 255), (216, 211, 175, 255)):
+                        return True
+                except IndexError:
+                    return True
+
+        if hotel.rect.colliderect(self.rect):
+            return True
+
+        return False
 
 
 class Hotel:
@@ -42,10 +58,11 @@ class Hotel:
         self.image = image_dict["hotel"]
         self.rect = self.image.get_rect()
         self.positions = (
-            (75, 40),
-            (75, 300)
+            (57, -4),
+            (563, -4),
+            (57, 260),
+            (438, 260)
         )
-        print(choice(self.positions))
         if x is None and y is None:
             self.rect.topleft = choice(self.positions)
         elif x is not None and y is not None:
@@ -53,8 +70,25 @@ class Hotel:
         else:
             raise ValueError("One coordinate is known but the other one is not!")
 
+
+class Parking:
+    def __init__(self, my_hotel: Hotel):
+        self.image = image_dict["parking"]
+        self.rect = self.image.get_rect()
+        self.rect.centerx = my_hotel.rect.centerx
+        self.rect.y = my_hotel.rect.y + my_hotel.image.get_height()
+
+
+class Passenger:
+    def __init__(self, my_hotel: Hotel):
+        self.image = image_dict["passenger"]
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
+
 player = Player(0, 0)
 hotel = Hotel()
+parking = Parking(hotel)
+passenger = Passenger(hotel)
 
 pg.init()
 
@@ -68,6 +102,8 @@ while running:
             running = False
         if event.type == pg.KEYDOWN:
             ...
+            # if event.key == pg.K_s:
+            #     print(pg.mouse.get_pos())
             # if event.key == pg.K_RIGHT:
             #     player.x_direction += 1
             #     player.view = "right"
@@ -80,17 +116,11 @@ while running:
             # elif event.key == pg.K_DOWN:
             #     player.y_direction += 1
             #     player.view = "front"
+        if event.type == pg.MOUSEBUTTONDOWN:
+            print(f"{pg.mouse.get_pos()}: {sc.get_at(pg.mouse.get_pos())}")
 
     keys_pressed = pg.key.get_pressed()
 
-    if keys_pressed[pg.K_RIGHT]:
-        player.x_direction = 1
-        player.view = "right"
-    elif keys_pressed[pg.K_LEFT]:
-        player.x_direction = -1
-        player.view = "left"
-    else:
-        player.x_direction = 0
     if keys_pressed[pg.K_UP]:
         player.y_direction = -1
         player.view = "rear"
@@ -99,14 +129,27 @@ while running:
         player.view = "front"
     else:
         player.y_direction = 0
+    if keys_pressed[pg.K_RIGHT]:
+        player.x_direction = 1
+        player.view = "right"
+    elif keys_pressed[pg.K_LEFT]:
+        player.x_direction = -1
+        player.view = "left"
+    else:
+        player.x_direction = 0
 
     # sc.fill(WHITE)
     sc.blit(pg.transform.scale(image_dict["bg"], (w, h)), (0, 0))
 
     player.update()
+
+    sc.blit(parking.image, parking.rect)
+
     sc.blit(player.image, player.rect)
 
     sc.blit(hotel.image, hotel.rect)
+
+    sc.blit(passenger.image, passenger.rect)
 
     pg.display.flip()
 
