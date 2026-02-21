@@ -42,7 +42,12 @@ class Player:
         for x in range(self.rect.left, self.rect.right, 1):
             for y in range(self.rect.top, self.rect.bottom, 1):
                 try:
-                    if sc.get_at((x, y)) in ((220, 215, 177, 255), (202, 206, 157, 255), (212, 207, 174, 255), (216, 211, 175, 255)):
+                    if sc.get_at((x, y)) in ((220, 215, 177, 255),
+                                             (202, 206, 157, 255),
+                                             (212, 207, 174, 255),
+                                             (216, 211, 175, 255),
+                                             (150, 140, 119, 255),
+                                             (188, 184, 157, 255)):
                         return True
                 except IndexError:
                     return True
@@ -80,15 +85,25 @@ class Parking:
 
 
 class Passenger:
-    def __init__(self, my_hotel: Hotel):
+    def __init__(self, my_hotel: Hotel, my_player: Player):
         self.image = image_dict["passenger"]
         self.rect = self.image.get_rect()
-        self.rect.topleft = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
+        self.starting_position = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
+        self.is_collected = False
+        self.player = my_player
 
-player = Player(0, 0)
+    def update(self):
+        if self.rect.colliderect(self.player.rect):
+            self.is_collected = False
+        if self.is_collected:
+            self.rect.topleft = self.player.rect.topleft
+        else:
+            self.rect.topleft = self.starting_position
+
+player = Player(300, 300)
 hotel = Hotel()
 parking = Parking(hotel)
-passenger = Passenger(hotel)
+passenger = Passenger(hotel, player)
 
 pg.init()
 
@@ -142,6 +157,10 @@ while running:
     sc.blit(pg.transform.scale(image_dict["bg"], (w, h)), (0, 0))
 
     player.update()
+
+    if player.is_crashed():
+        player.rect.topleft = (300, 300)
+        passenger.is_collected = False
 
     sc.blit(parking.image, parking.rect)
 
