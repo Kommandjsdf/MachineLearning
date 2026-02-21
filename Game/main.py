@@ -1,6 +1,8 @@
 import pygame as pg
 from random import choice
 
+from pygame import SurfaceType
+
 w, h = 700, 450
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -31,7 +33,7 @@ class Player:
         self.rect.y = y
         self.x_direction = 0
         self.y_direction = 0
-        self.speed = 2
+        self.speed = 5
 
     def update(self):
         self.image = image_dict["player"][self.view]
@@ -47,7 +49,9 @@ class Player:
                                              (212, 207, 174, 255),
                                              (216, 211, 175, 255),
                                              (150, 140, 119, 255),
-                                             (188, 184, 157, 255)):
+                                             (188, 184, 157, 255),
+                                             (208, 204, 173, 255),
+                                             (210, 205, 174, 255)):
                         return True
                 except IndexError:
                     return True
@@ -115,6 +119,17 @@ hotel = Hotel()
 parking = Parking(hotel)
 passenger = Passenger(hotel, player, parking)
 
+def win_message(x: float | None, y: float | None, screen: pg.SurfaceType, my_passenger: Passenger) -> None:
+    font: pg.font.FontType = pg.font.Font(None, 150)
+    win_message_img: SurfaceType = font.render("YOU WON!", False, (0, 255, 0, 255), (0, 0, 0, 50))
+    if x is None:
+        x = w / 2 - win_message_img.get_width() / 2
+    if y is None:
+        y = h / 2 - win_message_img.get_height() / 2
+    if my_passenger.is_parked:
+        screen.blit(win_message_img, (x, y))
+
+
 pg.init()
 
 sc = pg.display.set_mode((w, h))
@@ -171,6 +186,8 @@ while running:
     if player.is_crashed():
         player.rect.topleft = (300, 185)
         passenger.is_collected = False
+
+    win_message(None, None, sc, passenger)
 
     passenger.update()
 
