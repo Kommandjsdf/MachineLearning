@@ -65,8 +65,8 @@ class Hotel:
         self.positions = (
             (57, -4),
             (563, -4),
-            (57, 260),
-            (438, 260)
+            (438, 260),
+            (57, 260)
         )
         if x is None and y is None:
             self.rect.topleft = choice(self.positions)
@@ -85,25 +85,35 @@ class Parking:
 
 
 class Passenger:
-    def __init__(self, my_hotel: Hotel, my_player: Player):
+    def __init__(self, my_hotel: Hotel, my_player: Player, my_parking: Parking):
         self.image = image_dict["passenger"]
         self.rect = self.image.get_rect()
-        self.starting_position = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
+        self.positions = ((70, 130), (575, 140), (450, 400), (70, 400))
+        # self.starting_position = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
+        self.starting_position = choice(self.positions)
+        while self.positions.index(self.starting_position) == my_hotel.positions.index(my_hotel.rect.topleft):
+            self.starting_position = choice(self.positions)
         self.is_collected = False
+        self.is_parked = False
         self.player = my_player
+        self.parking = my_parking
 
     def update(self):
-        if self.rect.colliderect(self.player.rect):
-            self.is_collected = False
-        if self.is_collected:
+        if self.rect.colliderect(self.parking.rect):
+            self.is_parked = True
+        elif self.rect.colliderect(self.player.rect):
+            self.is_collected = True
+        if self.is_parked:
+            self.rect.center = self.parking.rect.center
+        elif self.is_collected:
             self.rect.topleft = self.player.rect.topleft
         else:
-            self.rect.topleft = self.starting_position
+            self.rect.bottomleft = self.starting_position
 
-player = Player(300, 300)
+player = Player(300, 185)
 hotel = Hotel()
 parking = Parking(hotel)
-passenger = Passenger(hotel, player)
+passenger = Passenger(hotel, player, parking)
 
 pg.init()
 
@@ -159,8 +169,10 @@ while running:
     player.update()
 
     if player.is_crashed():
-        player.rect.topleft = (300, 300)
+        player.rect.topleft = (300, 185)
         passenger.is_collected = False
+
+    passenger.update()
 
     sc.blit(parking.image, parking.rect)
 
