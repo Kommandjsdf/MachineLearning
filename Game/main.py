@@ -20,7 +20,7 @@ image_dict = {
     "hotel" : pg.transform.scale(pg.image.load("img/hotel.png"), (80, 80)),
     "passenger" : pg.image.load("img/passenger.png"),
     "taxi_bg" : pg.transform.scale(pg.image.load("img/taxi_background.png"), (32, 32)),
-    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (32, 32))
+    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (48, 48))
 }
 
 
@@ -29,8 +29,8 @@ class Player:
         self.view = "rear"
         self.image = image_dict["player"][self.view]
         self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
+        self.starting_position = (x, y)
+        self.rect.topleft = self.starting_position
         self.x_direction = 0
         self.y_direction = 0
         self.speed = 5
@@ -93,7 +93,6 @@ class Passenger:
         self.image = image_dict["passenger"]
         self.rect = self.image.get_rect()
         self.positions = ((70, 130), (575, 140), (450, 400), (70, 400))
-        # self.starting_position = (my_hotel.rect.x, my_hotel.rect.y + my_hotel.image.get_height())
         self.starting_position = choice(self.positions)
         while self.positions.index(self.starting_position) == my_hotel.positions.index(my_hotel.rect.topleft):
             self.starting_position = choice(self.positions)
@@ -103,7 +102,7 @@ class Passenger:
         self.parking = my_parking
 
     def update(self):
-        if self.rect.colliderect(self.parking.rect):
+        if self.parking.rect.contains(self.rect):
             self.is_parked = True
         elif self.rect.colliderect(self.player.rect):
             self.is_collected = True
@@ -140,22 +139,6 @@ while running:
     for event in pg.event.get():
         if event.type == pg.QUIT:
             running = False
-        if event.type == pg.KEYDOWN:
-            ...
-            # if event.key == pg.K_s:
-            #     print(pg.mouse.get_pos())
-            # if event.key == pg.K_RIGHT:
-            #     player.x_direction += 1
-            #     player.view = "right"
-            # elif event.key == pg.K_LEFT:
-            #     player.x_direction += -1
-            #     player.view = "left"
-            # if event.key == pg.K_UP:
-            #     player.y_direction += -1
-            #     player.view = "rear"
-            # elif event.key == pg.K_DOWN:
-            #     player.y_direction += 1
-            #     player.view = "front"
         if event.type == pg.MOUSEBUTTONDOWN:
             print(f"{pg.mouse.get_pos()}: {sc.get_at(pg.mouse.get_pos())}")
 
@@ -184,7 +167,7 @@ while running:
     player.update()
 
     if player.is_crashed():
-        player.rect.topleft = (300, 185)
+        player.rect.topleft = player.starting_position
         passenger.is_collected = False
 
     win_message(None, None, sc, passenger)
