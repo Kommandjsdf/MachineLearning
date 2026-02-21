@@ -1,8 +1,6 @@
 import pygame as pg
 from random import choice
 
-from pygame import SurfaceType
-
 w, h = 700, 450
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -10,6 +8,7 @@ FPS = 30
 
 image_dict = {
     "bg" : pg.image.load("img/Background.png"),
+    "empty_bg" : pg.image.load("img/empty_background.png"),
     "player" : {
         "front" : pg.image.load("img/cab_front.png"),
         "left" : pg.image.load("img/cab_left.png"),
@@ -20,9 +19,22 @@ image_dict = {
     "hotel" : pg.transform.scale(pg.image.load("img/hotel.png"), (80, 80)),
     "passenger" : pg.image.load("img/passenger.png"),
     "taxi_bg" : pg.transform.scale(pg.image.load("img/taxi_background.png"), (32, 32)),
-    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (48, 48))
+    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (48, 48)),
+    "obstacle" : {
+        "small" : pg.image.load("img/small_barrier.png"),
+        "tall" : pg.image.load("img/tall_barrier.png"),
+        "long" : pg.image.load("img/long_barrier.png")
+    }
 }
 
+
+class Obstacle:
+    def __init__(self, x: float, y: float, size: str):
+        if size not in ("long", "tall", "small"):
+            raise ValueError("An obstacle's size can only be 'small', 'tall', or 'long'")
+        self.image = image_dict["obstacle"][size]
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
 
 class Player:
     def __init__(self, x, y):
@@ -41,24 +53,10 @@ class Player:
         self.rect.y += self.speed * self.y_direction
 
     def is_crashed(self):
-        for x in range(self.rect.left, self.rect.right, 1):
-            for y in range(self.rect.top, self.rect.bottom, 1):
-                try:
-                    if sc.get_at((x, y)) in ((220, 215, 177, 255),
-                                             (202, 206, 157, 255),
-                                             (212, 207, 174, 255),
-                                             (216, 211, 175, 255),
-                                             (150, 140, 119, 255),
-                                             (188, 184, 157, 255),
-                                             (208, 204, 173, 255),
-                                             (210, 205, 174, 255)):
-                        return True
-                except IndexError:
-                    return True
-
-        if hotel.rect.colliderect(self.rect):
+        if self.rect.collidelist(obstacles) != -1 or\
+                hotel.rect.colliderect(self.rect) or\
+                self.rect.left < 0 or self.rect.right > w or self.rect.top < 0 or self.rect.bottom > h:
             return True
-
         return False
 
 
@@ -113,14 +111,24 @@ class Passenger:
         else:
             self.rect.bottomleft = self.starting_position
 
-player = Player(300, 185)
-hotel = Hotel()
-parking = Parking(hotel)
-passenger = Passenger(hotel, player, parking)
+player: Player = Player(300, 190)
+hotel: Hotel = Hotel()
+parking: Parking = Parking(hotel)
+passenger: Passenger = Passenger(hotel, player, parking)
+
+obstacles: list[Obstacle] = []
+long_obstacle1 = Obstacle(65, 14, "long")
+long_obstacle2 = Obstacle(65, 415, "long")
+tall_obstacle1 = Obstacle(12, 67, "tall")
+tall_obstacle2 = Obstacle(645, 67, "tall")
+small_obstacle1 = Obstacle(265, 67, "small")
+small_obstacle2 = Obstacle(139, 261, "small")
+small_obstacle3 = Obstacle(392, 261, "small")
+obstacles.extend((long_obstacle1, long_obstacle2, tall_obstacle1, tall_obstacle2, small_obstacle1, small_obstacle2, small_obstacle3))
 
 def win_message(x: float | None, y: float | None, screen: pg.SurfaceType, my_passenger: Passenger) -> None:
     font: pg.font.FontType = pg.font.Font(None, 150)
-    win_message_img: SurfaceType = font.render("YOU WON!", False, (0, 255, 0, 255), (0, 0, 0, 50))
+    win_message_img: pg.SurfaceType = font.render("YOU WON!", False, (0, 255, 0, 255), (0, 0, 0, 50))
     if x is None:
         x = w / 2 - win_message_img.get_width() / 2
     if y is None:
@@ -162,7 +170,10 @@ while running:
         player.x_direction = 0
 
     # sc.fill(WHITE)
-    sc.blit(pg.transform.scale(image_dict["bg"], (w, h)), (0, 0))
+    sc.blit(pg.transform.scale(image_dict["empty_bg"], (w, h)), (0, 0))
+
+    for obstacle in obstacles:
+        sc.blit(obstacle.image, obstacle.rect)
 
     player.update()
 
