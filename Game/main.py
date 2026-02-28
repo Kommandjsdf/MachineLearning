@@ -1,5 +1,5 @@
 import pygame as pg
-from random import choice
+from random import choice, randint
 
 w, h = 700, 450
 BLACK = (0, 0, 0)
@@ -7,23 +7,23 @@ WHITE = (255, 255, 255)
 FPS = 30
 
 image_dict = {
-    "bg" : pg.image.load("img/Background.png"),
-    "empty_bg" : pg.image.load("img/empty_background.png"),
-    "player" : {
-        "front" : pg.image.load("img/cab_front.png"),
-        "left" : pg.image.load("img/cab_left.png"),
-        "rear" : pg.image.load("img/cab_rear.png"),
-        "right" : pg.image.load("img/cab_right.png"),
+    "bg": pg.image.load("img/Background.png"),
+    "empty_bg": pg.image.load("img/empty_background.png"),
+    "player": {
+        "front": pg.image.load("img/cab_front.png"),
+        "left": pg.image.load("img/cab_left.png"),
+        "rear": pg.image.load("img/cab_rear.png"),
+        "right": pg.image.load("img/cab_right.png"),
     },
-    "hole" : pg.image.load("img/hole.png"),
-    "hotel" : pg.transform.scale(pg.image.load("img/hotel.png"), (80, 80)),
-    "passenger" : pg.image.load("img/passenger.png"),
-    "taxi_bg" : pg.transform.scale(pg.image.load("img/taxi_background.png"), (32, 32)),
-    "parking" : pg.transform.scale(pg.image.load("img/parking.png"), (48, 48)),
-    "obstacle" : {
-        "small" : pg.image.load("img/small_barrier.png"),
-        "tall" : pg.image.load("img/tall_barrier.png"),
-        "long" : pg.image.load("img/long_barrier.png")
+    "hole": pg.image.load("img/hole.png"),
+    "hotel": pg.transform.scale(pg.image.load("img/hotel.png"), (80, 80)),
+    "passenger": pg.image.load("img/passenger.png"),
+    "taxi_bg": pg.transform.scale(pg.image.load("img/taxi_background.png"), (32, 32)),
+    "parking": pg.transform.scale(pg.image.load("img/parking.png"), (48, 48)),
+    "obstacle": {
+        "small": pg.image.load("img/small_barrier.png"),
+        "tall": pg.image.load("img/tall_barrier.png"),
+        "long": pg.image.load("img/long_barrier.png")
     }
 }
 
@@ -35,6 +35,7 @@ class Obstacle:
         self.image = image_dict["obstacle"][size]
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
+
 
 class Player:
     def __init__(self, x, y):
@@ -53,15 +54,18 @@ class Player:
         self.rect.y += self.speed * self.y_direction
 
     def is_crashed(self):
-        if self.rect.collidelist(obstacles) != -1 or\
-                hotel.rect.colliderect(self.rect) or\
+        if self.rect.collidelist(obstacles) != -1 or \
+                hotel.rect.colliderect(self.rect) or \
                 self.rect.left < 0 or self.rect.right > w or self.rect.top < 0 or self.rect.bottom > h:
             return True
+        for ho in holes:
+            if self.rect.colliderect(ho.rect):
+                return True
         return False
 
 
 class Hotel:
-    def __init__(self, x = None, y = None):
+    def __init__(self, x=None, y=None):
         self.image = image_dict["hotel"]
         self.rect = self.image.get_rect()
         self.positions = (
@@ -111,7 +115,31 @@ class Passenger:
         else:
             self.rect.bottomleft = self.starting_position
 
-player: Player = Player(300, 190)
+
+class Hole:
+    def __init__(self, my_player: Player,
+                 my_hotel: Hotel,
+                 my_passenger: Passenger,
+                 my_parking: Parking,
+                 o_list: list[Obstacle]):
+        self.player = my_player
+        self.hotel = my_hotel
+        self.passenger = my_passenger
+        self.parking = my_parking
+        self.o_list = o_list
+        self.image = image_dict["hole"]
+        self.rect = self.image.get_rect()
+
+    def check_touch(self):
+        if self.rect.collidelist((self.player.rect, self.hotel.rect, self.parking.rect, self.passenger.rect)) != -1:
+            return True
+        for o in self.o_list:
+            if self.rect.colliderect(o.rect):
+                return True
+        return False
+
+
+player: Player = Player(300, 210)
 hotel: Hotel = Hotel()
 parking: Parking = Parking(hotel)
 passenger: Passenger = Passenger(hotel, player, parking)
@@ -124,7 +152,16 @@ tall_obstacle2 = Obstacle(645, 67, "tall")
 small_obstacle1 = Obstacle(265, 67, "small")
 small_obstacle2 = Obstacle(139, 261, "small")
 small_obstacle3 = Obstacle(392, 261, "small")
-obstacles.extend((long_obstacle1, long_obstacle2, tall_obstacle1, tall_obstacle2, small_obstacle1, small_obstacle2, small_obstacle3))
+obstacles.extend(
+    (long_obstacle1, long_obstacle2, tall_obstacle1, tall_obstacle2, small_obstacle1, small_obstacle2, small_obstacle3))
+
+holes = []
+for i in range(5):
+    globals()[f"hole{i}"] = Hole(player, hotel, passenger, parking, obstacles)
+    globals()[f"hole{i}"].rect.topleft = (
+        randint(0, w - globals()[f"hole{i}"].rect.width), randint(0, h - globals()[f"hole{i}"].rect.height))
+    holes.append(globals()[f"hole{i}"])
+
 
 def win_message(x: float | None, y: float | None, screen: pg.SurfaceType, my_passenger: Passenger) -> None:
     font: pg.font.FontType = pg.font.Font(None, 150)
@@ -181,9 +218,14 @@ while running:
         player.rect.topleft = player.starting_position
         passenger.is_collected = False
 
-    win_message(None, None, sc, passenger)
-
     passenger.update()
+
+    for hole in holes:
+        while hole.check_touch():
+            hole.rect.topleft = (randint(0, w - hole.rect.width), randint(0, h - hole.rect.height))
+        sc.blit(hole.image, hole.rect)
+
+    win_message(None, None, sc, passenger)
 
     sc.blit(parking.image, parking.rect)
 
