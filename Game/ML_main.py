@@ -3,7 +3,7 @@ from collections import defaultdict
 import numpy as np
 
 import pygame as pg
-from random import choice, randint, random
+from random import choice, random
 
 w, h = 700, 450
 BLACK = (0, 0, 0)
@@ -78,7 +78,7 @@ class Hotel:
             (57, -4),
             (563, -4),
             (438, 260),
-            (57, 260)
+            # (57, 260)
         )
         if x is None and y is None:
             self.rect.topleft = choice(self.positions)
@@ -96,9 +96,36 @@ class Parking:
         self.rect.y = my_hotel.rect.y + my_hotel.image.get_height()
 
 
+class Passenger:
+    def __init__(self, my_hotel: Hotel, my_player: Player, my_parking: Parking):
+        self.image = image_dict["passenger"]
+        self.rect = self.image.get_rect()
+        self.positions = ((70, 130), (575, 140), (450, 400), (70, 400))
+        self.starting_position = choice(self.positions)
+        while self.positions.index(self.starting_position) == my_hotel.positions.index(my_hotel.rect.topleft):
+            self.starting_position = choice(self.positions)
+        self.is_collected = False
+        self.is_parked = False
+        self.player = my_player
+        self.parking = my_parking
+
+    def update(self):
+        if self.parking.rect.contains(self.rect):
+            self.is_parked = True
+        elif self.rect.colliderect(self.player.rect):
+            self.is_collected = True
+        if self.is_parked:
+            self.rect.center = self.parking.rect.center
+        elif self.is_collected:
+            self.rect.topleft = self.player.rect.topleft
+        else:
+            self.rect.bottomleft = self.starting_position
+
+
 player: Player = Player(300, 210)
 hotel: Hotel = Hotel()
 parking: Parking = Parking(hotel)
+passenger: Passenger = Passenger(hotel, player, parking)
 
 obstacles: list[Obstacle] = []
 long_obstacle1 = Obstacle(65, 14, "long")
@@ -148,31 +175,38 @@ def draw_elements():
         sc.blit(obstacle.image, obstacle.rect)
 
     player.update()
+    
+    passenger.update()
 
     sc.blit(parking.image, parking.rect)
 
     sc.blit(player.image, player.rect)
 
     sc.blit(hotel.image, hotel.rect)
+    
+    sc.blit(passenger.image, passenger.rect)
 
     pg.display.flip()
 
 actions = [0, 1, 2, 3]
 # (x, y) : [0, 0, 0, 0]
-Q_table = defaultdict(lambda: [0, 0, 0, 0])
+Q_table_passenger = defaultdict(lambda: [0, 0, 0, 0])
+Q_table_parking = defaultdict(lambda: [0, 0, 0, 0])
 
 learning_rate = 0.9
 discount_factor = 0.9
 epsilon = 0.05
+goal = passenger
 
 def choose_action(state):
     if random() < epsilon:
         return choice(actions)
-    else:
-        return np.argmax(Q_table[state])
+    elif goal == passenger:
+        return np.argmax(Q_table_passenger[state])
+    elif goal == parking:
+        return np.argmax(Q_table_parking[state])
 
-def get_direction(pos_current, pos_next, park: Parking = parking):
-    dest = park.rect.center
+def get_direction(pos_current, pos_next, dest):
     d_current = math.sqrt((dest[0] - pos_current[0])**2+(dest[1] - pos_current[1])**2)
     d_next = math.sqrt((dest[0] - pos_next[0])**2+(dest[1] - pos_next[1])**2)
     if d_next < d_current:
@@ -180,10 +214,16 @@ def get_direction(pos_current, pos_next, park: Parking = parking):
     return False
 
 def update_Q(state, action, reward, new_state):
-    base_next = max(Q_table[new_state])
-    Q_table[state][action] += learning_rate * (discount_factor * base_next + reward - Q_table[state][action])
+    if goal == passenger:
+        base_next = max(Q_table_passenger[new_state])
+        Q_table_passenger[state][action] += learning_rate * (discount_factor * base_next + reward - Q_table_passenger[state][action])
+    elif goal == parking:
+        base_next = max(Q_table_parking[new_state])
+        Q_table_parking[state][action] += learning_rate * (
+                    discount_factor * base_next + reward - Q_table_parking[state][action])
 
 def make_step():
+    global goal
     current_state = (player.rect.x, player.rect.y)
     action = choose_action(current_state)
 
@@ -194,25 +234,33 @@ def make_step():
     reward = -0.1
     episode_end = False
     success = False
+    collected = False
     if player.is_crashed():
-        reward = -100
+        reward = -50
         episode_end = True
-    elif parking.rect.contains(player.rect):
-        reward = 100
+        passenger.is_collected = False
+        goal = passenger
+    elif passenger.is_parked and goal == parking:
+        reward = 50
         episode_end = True
         success = True
+    elif passenger.is_collected and goal == passenger:
+        reward = 50
+        collected = True
+        goal = parking
 
     next_state = (player.rect.x, player.rect.y)
-    if not episode_end:
-        if get_direction(current_state, next_state):
+    if not episode_end and not collected:
+        if get_direction(current_state, next_state, goal.rect.center):
             reward = 0
     update_Q(current_state, action, reward, next_state)
 
+    # print(goal, passenger.is_collected)
     return episode_end, success
 
 
-num_episodes = 300
-max_step = 50
+num_episodes = 500
+max_step = 80
 for episode in range(num_episodes):
     player.rect.x, player.rect.y = 320, 300
     for step in range(max_step):
@@ -221,7 +269,11 @@ for episode in range(num_episodes):
             results.append(suc)
             break
 
-print(Q_table)
+passenger.is_collected = False
+goal = passenger
+
+print(Q_table_passenger)
+print(Q_table_parking)
 print(results)
 print(f"Got to the end {results.count(True)/num_episodes*100:.2f}% of total times")
 try:
@@ -245,7 +297,10 @@ while running:
             print(f"{pg.mouse.get_pos()}: {sc.get_at(pg.mouse.get_pos())}")
     # sc.fill(WHITE)
 
-    current_values = Q_table[player.rect.topleft]
+    if passenger.is_collected:
+        current_values = Q_table_parking[player.rect.topleft]
+    else:
+        current_values = Q_table_passenger[player.rect.topleft]
     max_index = current_values.index(max(current_values)) # 0 - right, 1 - left, 2 - up, 3 - down
     if max_index == 2:
         player.y_direction = -1
