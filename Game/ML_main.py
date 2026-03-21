@@ -1,3 +1,4 @@
+import math
 from collections import defaultdict
 import numpy as np
 
@@ -7,12 +8,12 @@ from random import choice, randint, random
 w, h = 700, 450
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-FPS = 30
 
 pg.init()
 
 sc = pg.display.set_mode((w, h))
 clock = pg.time.Clock()
+results = []
 running = True
 
 image_dict = {
@@ -55,12 +56,11 @@ class Player:
         self.rect.topleft = self.starting_position
         self.x_direction = 0
         self.y_direction = 0
-        self.speed = 5
 
     def update(self):
         self.image = image_dict["player"][self.view]
-        self.rect.x += self.speed * self.x_direction
-        self.rect.y += self.speed * self.y_direction
+        self.rect.x += self.rect.width * self.x_direction
+        self.rect.y += self.rect.height * self.y_direction
 
     def is_crashed(self):
         if self.rect.collidelist(obstacles) != -1 or \
@@ -111,7 +111,7 @@ small_obstacle3 = Obstacle(392, 261, "small")
 obstacles.extend(
     (long_obstacle1, long_obstacle2, tall_obstacle1, tall_obstacle2, small_obstacle1, small_obstacle2, small_obstacle3))
 
-## Q-LEARNING
+## Q-LEARNING ================================================================
 
 def apply_action(action):
     # global player
@@ -141,19 +141,43 @@ def apply_action(action):
     if 0 < new_y < h - player.rect.height:
         player.rect.y = new_y
 
-actions = [0, 1, 2, 3] # 0 - right, 1 - left, 2 - up, 3 - down
+def draw_elements():
+    sc.blit(pg.transform.scale(image_dict["empty_bg"], (w, h)), (0, 0))
+
+    for obstacle in obstacles:
+        sc.blit(obstacle.image, obstacle.rect)
+
+    player.update()
+
+    sc.blit(parking.image, parking.rect)
+
+    sc.blit(player.image, player.rect)
+
+    sc.blit(hotel.image, hotel.rect)
+
+    pg.display.flip()
+
+actions = [0, 1, 2, 3]
 # (x, y) : [0, 0, 0, 0]
 Q_table = defaultdict(lambda: [0, 0, 0, 0])
 
 learning_rate = 0.9
 discount_factor = 0.9
-epsilon = -1
+epsilon = 0.05
 
 def choose_action(state):
     if random() < epsilon:
         return choice(actions)
     else:
         return np.argmax(Q_table[state])
+
+def get_direction(pos_current, pos_next, park: Parking = parking):
+    dest = park.rect.center
+    d_current = math.sqrt((dest[0] - pos_current[0])**2+(dest[1] - pos_current[1])**2)
+    d_next = math.sqrt((dest[0] - pos_next[0])**2+(dest[1] - pos_next[1])**2)
+    if d_next < d_current:
+        return True
+    return False
 
 def update_Q(state, action, reward, new_state):
     base_next = max(Q_table[new_state])
@@ -165,7 +189,9 @@ def make_step():
 
     apply_action(action)
 
-    reward = -1
+    draw_elements()
+
+    reward = -0.1
     episode_end = False
     success = False
     if player.is_crashed():
@@ -177,6 +203,9 @@ def make_step():
         success = True
 
     next_state = (player.rect.x, player.rect.y)
+    if not episode_end:
+        if get_direction(current_state, next_state):
+            reward = 0
     update_Q(current_state, action, reward, next_state)
 
     return episode_end, success
@@ -185,17 +214,28 @@ def make_step():
 num_episodes = 300
 max_step = 50
 for episode in range(num_episodes):
-    player.rect.x, player.rect.y = 300, 300
+    player.rect.x, player.rect.y = 320, 300
     for step in range(max_step):
         ep_end, suc = make_step()
         if ep_end:
-            print(suc)
+            results.append(suc)
             break
 
 print(Q_table)
+print(results)
+print(f"Got to the end {results.count(True)/num_episodes*100:.2f}% of total times")
+try:
+    print(f"The first successful attempt was attempt #{results.index(True)+1}")
+    print(f"Among the last 20 attempts, {results[-20:].count(True) * 5:.2f}% were successful")
+    print(f"Among the last 10 attempts, {results[-10:].count(True) * 10:.2f}% were successful")
+    print(f"Among the last 5 attempts, {results[-5:].count(True) * 20:.2f}% were successful")
+except ValueError:
+    print("No successful attempts happened")
 
-## Q-LEARNING
+## Q-LEARNING ============================================
 
+FPS = 2
+player.rect.topleft = 320, 300
 while running:
     clock.tick(FPS)
     for event in pg.event.get():
@@ -203,43 +243,27 @@ while running:
             running = False
         if event.type == pg.MOUSEBUTTONDOWN:
             print(f"{pg.mouse.get_pos()}: {sc.get_at(pg.mouse.get_pos())}")
+    # sc.fill(WHITE)
 
-    keys_pressed = pg.key.get_pressed()
-
-    if keys_pressed[pg.K_UP]:
+    current_values = Q_table[player.rect.topleft]
+    max_index = current_values.index(max(current_values)) # 0 - right, 1 - left, 2 - up, 3 - down
+    if max_index == 2:
         player.y_direction = -1
         player.view = "rear"
-    elif keys_pressed[pg.K_DOWN]:
+    elif max_index == 3:
         player.y_direction = 1
         player.view = "front"
     else:
         player.y_direction = 0
-    if keys_pressed[pg.K_RIGHT]:
+    if max_index == 0:
         player.x_direction = 1
         player.view = "right"
-    elif keys_pressed[pg.K_LEFT]:
+    elif max_index == 1:
         player.x_direction = -1
         player.view = "left"
     else:
         player.x_direction = 0
-    # sc.fill(WHITE)
 
-    sc.blit(pg.transform.scale(image_dict["empty_bg"], (w, h)), (0, 0))
-
-    for obstacle in obstacles:
-        sc.blit(obstacle.image, obstacle.rect)
-
-    player.update()
-
-    # if player.is_crashed():
-    #     player.rect.topleft = player.starting_position
-
-    sc.blit(parking.image, parking.rect)
-
-    sc.blit(player.image, player.rect)
-
-    sc.blit(hotel.image, hotel.rect)
-
-    pg.display.flip()
+    draw_elements()
 
 pg.quit()
